@@ -2,6 +2,9 @@ from app.database.models import async_session
 from app.database.models import User, Case
 from sqlalchemy import select, update, delete
 from sqlalchemy.sql import func
+import tracemalloc
+
+tracemalloc.start()
 
 
 async def set_user(tg_id: int, user_name: str) -> None:
@@ -18,9 +21,12 @@ async def set_case(tg_id, date, time, case):
 
 async def get_today_plans(tg_id):
     async with async_session() as session:
-        results = await session.select(Case.id, Case.date, Case.time, Case.case).where(
-            Case.user_id == tg_id and Case.date == func.current_date() and Case.success == 0)
-        todays = f''
-        for result in results:
-            todays += f'{result.id} {result.date} {result.time} {result.case}\n'
-        return todays
+        async with session.begin():
+            result = await session.execute(select(Case).where(
+                (Case.user_id == tg_id) & (Case.date == func.current_date()) & (Case.success == False)))
+            today = result.scalars().all()
+            plans = f''
+            for case in today:
+                plans += f'[{case.id}]  {case.date}  {case.time}  {case.case}\n'
+            return plans
+
