@@ -7,13 +7,11 @@ from aiogram.fsm.context import FSMContext
 import app.database.requests as rq
 from app.database.models import User, Case
 from datetime import datetime
+from app.classes import Case, Number, Number1, Day
 
 router = Router()
 
-class Case(StatesGroup):
-    date = State()
-    time = State()
-    case = State()
+
 
 @router.message(CommandStart())
 async def start(message: Message):
@@ -46,6 +44,60 @@ async def input_case(message: Message, state: FSMContext):
     await message.answer(f'Дело успешно записано!\n{data["date"]}\n{data["time"]}\n{data["case"]}')
     await state.clear()
 @router.message(F.text == 'Список дел' or Command('get_todays'))
-async def get_today(message: Message):
-    today = await rq.get_today_plans(message.from_user.id)
-    await message.answer(f'Ваш список дел на сегодня:\n{today}')
+async def day_choice(message: Message):
+    await message.answer(f'Выберите день', reply_markup=await kb.plans_list())
+
+@router.callback_query(F.data == 'today')
+async def get_todays(callback: CallbackQuery):
+    today = await rq.get_today_plans(callback.from_user.id)
+    await callback.message.answer(f'Ваш список дел на сегодня:\n{today}', reply_markup= await kb.change_list())
+@router.callback_query(F.data == 'another')
+async def get_today(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(Day.date)
+    await callback.message.answer('Введите дату в формате "ГГГГ:ММ:ДД"')
+
+@router.message(Day.date)
+async def set_day(message: Message, state: FSMContext):
+    await state.update_data(date=message.text)
+    data = await state.get_data()
+    today = await rq.get_plans(message.from_user.id, datetime.strptime(data["date"], '%Y:%m:%d').date())
+    await message.answer(f'Ваш список дел на {data["date"]}:\n{today}', reply_markup= await kb.change_list())
+    await state.clear()
+
+@router.callback_query(F.data == 'delete')
+async def delete1(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(Number.number)
+    await callback.message.answer('Напишите номер дела из списка без []')
+
+
+@router.message(Number.number)
+async def delete2(message: Message, state: FSMContext):
+    await state.update_data(number=message.text)
+    data = await state.get_data()
+    success = await rq.delete_case(message.from_user.id, data["number"])
+    await message.answer(success)
+    await state.clear()
+
+@router.callback_query(F.data == 'execute')
+async def execute1(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(Number1.number)
+    await callback.message.answer('Напишите номер дела из списка без []')
+
+@router.message(Number1.number)
+async def execute2(message: Message, state: FSMContext):
+    await state.update_data(number=message.text)
+    data = await state.get_data()
+    success = await rq.execute_case(message.from_user.id, data["number"])
+    await message.answer(success)
+    await state.clear()
+
+@router.message(F.text == 'Мой прогресс')
+async def progress(message: Message):
+    data = await rq.get_successed(message.from_user.id)
+    await message.answer(f'Вы уже выполнили немало дел!:\n{data}')
+
+@router.message()
+async def notify():
+    await router.message.answer(f'Работает!!')
+
+

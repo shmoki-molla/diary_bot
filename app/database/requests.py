@@ -29,4 +29,39 @@ async def get_today_plans(tg_id):
             for case in today:
                 plans += f'[{case.id}]  {case.date}  {case.time}  {case.case}\n'
             return plans
+async def get_plans(tg_id, date):
+    async with async_session() as session:
+        async with session.begin():
+            result = await session.execute(select(Case).where(
+                (Case.user_id == tg_id) & (Case.date == date) & (Case.success == False)))
+            today = result.scalars().all()
+            plans = f''
+            for case in today:
+                plans += f'[{case.id}]  {case.date}  {case.time}  {case.case}\n'
+            return plans
+async def delete_case(tg_id, number):
+    async with async_session() as session:
+        async with session.begin():
+            await session.execute(delete(Case).where(
+                (Case.user_id == tg_id) & (Case.id == int(number))
+            ))
+            return f'Дело успешно удалено!'
 
+async def execute_case(tg_id, number):
+    async with async_session() as session:
+        async with session.begin():
+            await session.execute(update(Case).where(
+                (Case.user_id == tg_id) & (Case.id == int(number))
+            ).values(success=1))
+            return f'Дело отмечено как выполненное!'
+
+async def get_successed(tg_id):
+    async with async_session() as session:
+        async with session.begin():
+            result = await session.execute(select(Case).where(
+                (Case.user_id == tg_id) & (Case.success == True)))
+            today = result.scalars().all()
+            plans = f''
+            for case in today:
+                plans += f'[{case.id}]  {case.date}  {case.time}  {case.case}\n'
+            return plans
